@@ -8,8 +8,8 @@ Provide a menu driven by text to speach commands to write a playlist to a RFID c
 
 import logging
 from mopidy import core
-from mopidy import audio
-from mopidy.mixer import Mixer
+#from mopidy import audio
+#from mopidy.mixer import Mixer
 import pykka
 
 # For RFID reader and control buttons we need GPIOs
@@ -32,15 +32,15 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
   def __init__(self, config, core):
     super().__init__()
     self.core = core
-    self.mixer = Mixer
-    self.audio = audio
+    #self.mixer = Mixer
+    #self.audio = audio
     self.config = config["Figlio"]
     self.playlists = []
     GPIO.setwarnings(True)
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(25, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-    GPIO.add_event_detect(25, GPIO.FALLING, callback=self.cb_card_inserted, bouncetime=1000)    
-    Gst.init(None)
+    GPIO.add_event_detect(25, GPIO.BOTH, callback=self.cb_card_inserted, bouncetime=1000)
+    #Gst.init(None)
 
   def on_start(self):
     logger.info('!!!!!!!!!!!!!!!!! Figlio Frontend started !!!!!!!!!!!!!!!!!!!!!!!!!!!!')
@@ -54,10 +54,9 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
     logger.info('!!!!!!!!!!!!!!!!! Figlio Frontend failed !!!!!!!!!!!!!!!!!!!!!!!!!!!!')
     GPIO.cleanup()
 
-
   def cb_card_inserted(self,channel):
     """
-    This is the callback function which is called as soon as a RFID card is inserted in the slot.
+    This is the callback function which is called as soon as a RFID card is inserted or removed in the slot.
     Card insertation could be detected by photo sensor or physical contact switch.
     From the card the playlist URI, the position in the track list and the time position is read.
     Current format is: <playlist uri>,<track pos>,<time pos> 
@@ -65,14 +64,19 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
 
     TODOS: a lot
     """
+    # We stop plying as soon as card is removed
+    if GPIO.input(channel) == GPIO.LOW:
+      self.core.playback.stop()
+      #self.core.playback.set_state("paused")
+      logger.info("Core Playback State:{0}".format(self.core.playback.get_state().get()))
+      return
+    
     id = None
     rf_tlid = None
     rf_seek = None
     content = None
     reader = SimpleMFRC522()
-    self.core.playback.stop()
-    #self.core.playback.set_state("stopped")
-    logger.info("Core Playback State:{0}".format(self.core.playback.get_state().get()))
+    
     #Current MFRC522 implementation of SimpleMFRC522 support only 48 bytes maximum data length.
     #create own function for reading and writing.
     id, content = reader.read_no_block()
@@ -83,12 +87,14 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
     #Playlist name is only derived from playlist filename
     #Add support of extended M3U Tag #PLAYLIST:
     logger.info("Playing: {0} Last Modifed:{1} URI:{2}".format(playlist.name, playlist.last_modified, playlist.uri))
-    self.announce("Ich spiele für Dich " + playlist.name)
+    #self.announce("Ich spiele für Dich " + playlist.name)
     tracks = self.core.playlists.get_items(playlist_uri).get()
     track_uris = [track.uri for track in tracks]
     logger.debug("Track URI: {0}".format(track_uris))
     self.core.tracklist.set_single(False)
     self.core.tracklist.set_consume(False)
+    # Repeat mode is needed to not stop after first track is played
+    self.core.tracklist.set_repeat(True)
     if self.core.tracklist.get_length().get():
       self.core.tracklist.clear()
     self.core.tracklist.add(uris=track_uris, at_position=1)
@@ -97,7 +103,7 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
     logger.info("TLIDs: {0}".format(self.core.tracklist.get_tl_tracks().get()))
     play = self.core.playback.play(tlid=int(rf_tlid)+first_tlid)
     logger.info("Play command result:{0}".format(play.get()))
-    logger.info("Version: {0} Length: {1} Index:{2}".format(self.core.tracklist.get_version().get(), self.core.tracklist.get_length().get(), self.core.tracklist.index(tlid=4).get()))
+    logger.info("Tracklist version: {0} Length: {1} Index:{2}".format(self.core.tracklist.get_version().get(), self.core.tracklist.get_length().get(), self.core.tracklist.index(tlid=4).get()))
     seek = self.core.playback.seek(time_position=int(rf_seek))    
     logger.info("Seek: {0}".format(seek.get()))
     logger.info("Next Track TLID:{0}".format(self.core.tracklist.get_eot_tlid().get()))
