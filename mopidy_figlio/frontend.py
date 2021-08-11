@@ -19,6 +19,7 @@ from mfrc522 import SimpleMFRC522
 
 # For audio announcements currently GStreamer is used.
 #TODO: test if possible to use mopidy.audio instead.
+
 import gi
 gi.require_version('Gst', '1.0')
 from gi.repository import Gst, GObject
