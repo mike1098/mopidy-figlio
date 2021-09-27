@@ -5,8 +5,9 @@ A mopidy extension to read a playlist from RFID card and start playing at same t
 Announce the playlist name with text to speach.
 Provide a menu driven by text to speach commands to write a playlist to a RFID card 
 """
-  
+############  
 #playback issue
+###########
 
 import logging
 from mopidy import core
