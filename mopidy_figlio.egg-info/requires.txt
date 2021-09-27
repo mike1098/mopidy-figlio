@@ -9,10 +9,10 @@ flake8
 flake8-bugbear
 flake8-import-order
 isort[pyproject]
-pytest
-pytest-cov
 twine
 wheel
+pytest
+pytest-cov
 
 [lint]
 black

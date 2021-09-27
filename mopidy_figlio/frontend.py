@@ -35,7 +35,7 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
     self.core = core
     #self.mixer = Mixer
     #self.audio = audio
-    self.config = config["Figlio"]
+    self.config = config["figlio"]
     self.playlists = []
     GPIO.setwarnings(True)
     GPIO.setmode(GPIO.BCM)
