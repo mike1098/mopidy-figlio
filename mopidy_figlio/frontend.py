@@ -1,7 +1,9 @@
 import logging
 from mopidy import core
+from mopidy.core import CoreListener
 import pykka
 from gpiozero import Button
+from time import sleep
 
 logger = logging.getLogger(__name__) #mopidy_figlio.frontend
 
@@ -9,7 +11,7 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
     def __init__(self, config, core):
         super().__init__()
         self.core = core
-        self.config = config["Figlio"]
+        self.config = config["figlio"]
     
     def on_start(self):
         logger.info('!!!!!!!!!!!!!!!!! Figlio Frontend started !!!!!!!!!!!!!!!!!!!!!!!!!!!!')
@@ -46,12 +48,18 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
             self.core.playback.play()
         logger.info("Playback State: {0}".format(self.core.playback.get_state().get()))
 
+    def  track_playback_started(self,tl_track):
+        seek = self.core.playback.seek(160000).get()
+        logger.info("Seek command result: {0}".format(seek))
+
     def cb_card_inserted(self):
         logger.info("Card inserted")
         track_uris = ['file:///home/pi/Music/Blues/004%20doggin%27%20the%20blues.mp3', 'file:///home/pi/Music/Blues/003%20friendless%20blues.mp3']
         self.core.tracklist.add(uris=track_uris)
-        seek = self.core.playback.seek(160000).get()
-        logger.info("Seek command result: {0}".format(seek))
+        play = self.core.playback.play().get()
+
+        #logger.info("Seek command result: {0}".format(seek))
+        sleep(1)
         logger.info("Playback State: {0}".format(self.core.playback.get_state().get()))
 
     def cb_card_removed():
