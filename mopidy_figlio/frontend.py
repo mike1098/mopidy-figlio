@@ -5,6 +5,8 @@ A mopidy extension to read a playlist from RFID card and start playing at same t
 Announce the playlist name with text to speach.
 Provide a menu driven by text to speach commands to write a playlist to a RFID card 
 """
+  
+
 
 import logging
 from mopidy import core
@@ -35,7 +37,7 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
     self.core = core
     #self.mixer = Mixer
     #self.audio = audio
-    self.config = config["Figlio"]
+    self.config = config["figlio"]
     self.playlists = []
     GPIO.setwarnings(True)
     GPIO.setmode(GPIO.BCM)
