@@ -6,7 +6,7 @@ Announce the playlist name with text to speach.
 Provide a menu driven by text to speach commands to write a playlist to a RFID card 
 """
   
-
+#playback issue
 
 import logging
 from mopidy import core
