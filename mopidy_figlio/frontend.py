@@ -8,8 +8,6 @@ Provide a menu driven by text to speach commands to write a playlist to a RFID c
 
 import logging
 from mopidy import core
-#from mopidy import audio
-#from mopidy.mixer import Mixer
 import pykka
 
 # For RFID reader and control buttons we need GPIOs
