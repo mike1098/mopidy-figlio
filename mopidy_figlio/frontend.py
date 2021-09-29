@@ -37,6 +37,7 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
     #self.audio = audio
     self.config = config["figlio"]
     self.playlists = []
+    seek_time = 0
     GPIO.setwarnings(True)
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(25, GPIO.IN, pull_up_down=GPIO.PUD_UP)
@@ -55,6 +56,13 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
     logger.info('!!!!!!!!!!!!!!!!! Figlio Frontend failed !!!!!!!!!!!!!!!!!!!!!!!!!!!!')
     GPIO.cleanup()
 
+  def playback_state_changed(self, old_state, new_state):
+        logger.info("Playback State changed from: {0} to: {1}".format(old_state, new_state))
+        if old_state == "stopped":
+            seek = self.core.playback.seek(self.seek_time).get()
+            logger.info("Seek command result: {0}".format(seek))
+            self.seek_time = 0
+  
   def cb_card_inserted(self,channel):
     """
     This is the callback function which is called as soon as a RFID card is inserted or removed in the slot.
@@ -83,12 +91,13 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
     id, content = reader.read_no_block()
     logger.info("Card ID: {0} Content: {1}".format(id, content))
     playlist_uri, rf_tlid, rf_seek = content.split(",")
+    self.seek_time = int(rf_seek)
     logger.info("Playlist URI: {0} tlid: {1} seek: {2}".format(playlist_uri, rf_tlid, rf_seek))
     playlist = self.core.playlists.lookup(playlist_uri).get()
     #Playlist name is only derived from playlist filename
     #Add support of extended M3U Tag #PLAYLIST:
     logger.info("Playing: {0} Last Modifed:{1} URI:{2}".format(playlist.name, playlist.last_modified, playlist.uri))
-    #self.announce("Ich spiele für Dich " + playlist.name)
+    self.announce("Ich spiele für Dich " + playlist.name)
     tracks = self.core.playlists.get_items(playlist_uri).get()
     track_uris = [track.uri for track in tracks]
     logger.debug("Track URI: {0}".format(track_uris))
@@ -105,8 +114,8 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
     play = self.core.playback.play(tlid=int(rf_tlid)+first_tlid)
     logger.info("Play command result:{0}".format(play.get()))
     logger.info("Tracklist version: {0} Length: {1} Index:{2}".format(self.core.tracklist.get_version().get(), self.core.tracklist.get_length().get(), self.core.tracklist.index(tlid=4).get()))
-    seek = self.core.playback.seek(time_position=int(rf_seek))    
-    logger.info("Seek: {0}".format(seek.get()))
+    #seek = self.core.playback.seek(time_position=int(rf_seek))    
+    #logger.info("Seek: {0}".format(seek.get()))
     logger.info("Next Track TLID:{0}".format(self.core.tracklist.get_eot_tlid().get()))
 
   def reload_playlists(self):
