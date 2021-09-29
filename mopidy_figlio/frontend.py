@@ -7,7 +7,7 @@ from time import sleep
 
 logger = logging.getLogger(__name__) #mopidy_figlio.frontend
 
-class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
+class FiglioFrontend(pykka.ThreadingActor, CoreListener):
     def __init__(self, config, core):
         super().__init__()
         self.core = core
@@ -21,7 +21,7 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
         #photo sensor; If high or active, card is inserted.
         self.sensor = Button(25,pull_up=False)
         self.sensor.when_pressed = self.cb_card_inserted
-        self.sensor.when_released = self.cb_stop
+        self.sensor.when_released = self.cb_card_removed
         logger.info("Playback State: {0}".format(self.core.playback.get_state().get()))
 
     def on_stop(self):
@@ -47,20 +47,36 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
         else:
             self.core.playback.play()
         logger.info("Playback State: {0}".format(self.core.playback.get_state().get()))
-
-    def  track_playback_started(self,tl_track):
-        seek = self.core.playback.seek(160000).get()
+    
+    
+    
+    '''
+    def track_playback_started(self, tl_track):
+        seek = self.core.playback.seek(self.seek_time).get()
         logger.info("Seek command result: {0}".format(seek))
+        self.seek_time = 0
+    '''
+    def playback_state_changed(self, old_state, new_state):
+        logger.info("Playback State changed from: {0} to: {1}".format(old_state, new_state))
+        if old_state == "xxx":
+            seek = self.core.playback.seek(self.seek_time).get()
+            logger.info("Seek command result: {0}".format(seek))
+            self.seek_time = 0
 
     def cb_card_inserted(self):
+        self.seek_time = 160000
         logger.info("Card inserted")
         track_uris = ['file:///home/pi/Music/Blues/004%20doggin%27%20the%20blues.mp3', 'file:///home/pi/Music/Blues/003%20friendless%20blues.mp3']
         self.core.tracklist.add(uris=track_uris)
         play = self.core.playback.play().get()
-
-        #logger.info("Seek command result: {0}".format(seek))
+        sleep(1)
+        seek = self.core.playback.seek(160000).get()
         sleep(1)
         logger.info("Playback State: {0}".format(self.core.playback.get_state().get()))
+        logger.info("Seek command result: {0}".format(seek))
 
-    def cb_card_removed():
-        pass
+    def cb_card_removed(self):
+        logger.info("Card Removed")
+        stop = self.core.playback.stop().get()
+        logger.info("Sent Stop command")
+        logger.info("Playback State: {0}".format(self.core.playback.get_state().get()))
