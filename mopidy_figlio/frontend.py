@@ -31,8 +31,6 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
   def __init__(self, config, core):
     super().__init__()
     self.core = core
-    #self.mixer = Mixer
-    #self.audio = audio
     self.config = config["figlio"]
     self.playlists = []
     seek_time = 0
@@ -123,15 +121,6 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
       logger.debug("Load Playlist:{0}".format(playlist))
       self.selected_playlist = 0
       logger.debug("Found {0} playlists to load.".format(len(self.playlists)))
-
-  def audio_announce(self,announcment):
-    """ A test to use mopidy.audio for the announcmenets"""
-    announcment=requests.utils.quote(announcment)
-    uri="http://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q={0}&tl=de".format(announcment)
-    logger.debug("URI:{0}".format(uri))
-    self.audio.Audio.mixer=self.mixer
-    self.audio.Audio.set_uri(self, uri=uri)
-    self.audio.Audio.start_playback()
 
   def announce(self,announcment,lang="de"):
     """
