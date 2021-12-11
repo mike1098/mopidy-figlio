@@ -1,8 +1,8 @@
 Metadata-Version: 2.1
-Name: mopidy-raspberry-forkids
+Name: mopidy-figlio
 Version: 0.0.1
-Summary: Mopidy extension RFID reader Raspberry Pi
-Home-page: https://github.com/pimoroni/mopidy-raspberry-gpio
+Summary: Mopidy extension for kids using a RFID reader to control
+Home-page: https://github.com/mike1098/mopidy-figlio
 Author: Michael Frank
 Author-email: michael.frank@mikefrank.de
 License: Apache License, Version 2.0
