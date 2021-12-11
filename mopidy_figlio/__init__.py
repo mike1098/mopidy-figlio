@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 class Extension(ext.Extension):
 
     dist_name = "Mopidy-Figlio"
-    ext_name = "Figlio"
+    ext_name = "figlio"
     version = __version__
 
     def get_default_config(self):

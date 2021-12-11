@@ -8,13 +8,12 @@ Provide a menu driven by text to speach commands to write a playlist to a RFID c
 
 import logging
 from mopidy import core
-#from mopidy import audio
-#from mopidy.mixer import Mixer
 import pykka
 
 # For RFID reader and control buttons we need GPIOs
 # If other device as Raspi is used needs to be adjusted
-import RPi.GPIO as GPIO
+#import RPi.GPIO as GPIO
+from gpiozero import Button
 from mfrc522 import SimpleMFRC522
 
 # For audio announcements currently GStreamer is used.
@@ -33,28 +32,35 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
   def __init__(self, config, core):
     super().__init__()
     self.core = core
-    #self.mixer = Mixer
-    #self.audio = audio
-    self.config = config["Figlio"]
+    self.config = config["figlio"]
     self.playlists = []
-    GPIO.setwarnings(True)
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setup(25, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-    GPIO.add_event_detect(25, GPIO.BOTH, callback=self.cb_card_inserted, bouncetime=1000)
-    #Gst.init(None)
+    seek_time = 0
 
   def on_start(self):
     logger.info('!!!!!!!!!!!!!!!!! Figlio Frontend started !!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+    Gst.init(None)
     self.reload_playlists()
+    #Define button to play/pause
+    self.button = Button(17,pull_up=False)
+    self.button.when_pressed = self.cb_pause_play
+    #photo sensor; If high or active, card is inserted.
+    self.sensor = Button(25,pull_up=False)
+    self.sensor.when_pressed = self.cb_card_inserted
+    self.sensor.when_released = self.cb_card_removed
 
   def on_stop(self):
     logger.info('!!!!!!!!!!!!!!!!! Figlio Frontend stopped !!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-    GPIO.cleanup()
 
   def on_failure(self):
     logger.info('!!!!!!!!!!!!!!!!! Figlio Frontend failed !!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-    GPIO.cleanup()
 
+  def playback_state_changed(self, old_state, new_state):
+        logger.info("Playback State changed from: {0} to: {1}".format(old_state, new_state))
+        if old_state == "stopped":
+            seek = self.core.playback.seek(self.seek_time).get()
+            logger.info("Seek command result: {0}".format(seek))
+            self.seek_time = 0
+  
   def cb_card_inserted(self,channel):
     """
     This is the callback function which is called as soon as a RFID card is inserted or removed in the slot.
@@ -65,30 +71,34 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
 
     TODOS: a lot
     """
+    
+    '''
     # We stop plying as soon as card is removed
     if GPIO.input(channel) == GPIO.LOW:
       self.core.playback.stop()
       #self.core.playback.set_state("paused")
       logger.info("Core Playback State:{0}".format(self.core.playback.get_state().get()))
       return
-    
+    '''
+
     id = None
     rf_tlid = None
     rf_seek = None
     content = None
-    reader = SimpleMFRC522()
-    
     #Current MFRC522 implementation of SimpleMFRC522 support only 48 bytes maximum data length.
     #create own function for reading and writing.
+    reader = SimpleMFRC522()
+    
     id, content = reader.read_no_block()
     logger.info("Card ID: {0} Content: {1}".format(id, content))
     playlist_uri, rf_tlid, rf_seek = content.split(",")
+    self.seek_time = int(rf_seek)
     logger.info("Playlist URI: {0} tlid: {1} seek: {2}".format(playlist_uri, rf_tlid, rf_seek))
     playlist = self.core.playlists.lookup(playlist_uri).get()
     #Playlist name is only derived from playlist filename
-    #Add support of extended M3U Tag #PLAYLIST:
+    #Add support of extended M3U Tag #PLAYLIST to mopidy core
     logger.info("Playing: {0} Last Modifed:{1} URI:{2}".format(playlist.name, playlist.last_modified, playlist.uri))
-    #self.announce("Ich spiele für Dich " + playlist.name)
+    self.announce("Ich spiele für Dich " + playlist.name)
     tracks = self.core.playlists.get_items(playlist_uri).get()
     track_uris = [track.uri for track in tracks]
     logger.debug("Track URI: {0}".format(track_uris))
@@ -99,15 +109,36 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
     if self.core.tracklist.get_length().get():
       self.core.tracklist.clear()
     self.core.tracklist.add(uris=track_uris, at_position=1)
-    first_tlid = self.core.tracklist.get_tl_tracks().get()[0].tlid -1
-    logger.info("TL Tracks Type:{0}".format(type(self.core.tracklist.get_tl_tracks().get())))
+    first_tlid = self.core.tracklist.get_tl_tracks().get()[0].tlid
     logger.info("TLIDs: {0}".format(self.core.tracklist.get_tl_tracks().get()))
     play = self.core.playback.play(tlid=int(rf_tlid)+first_tlid)
     logger.info("Play command result:{0}".format(play.get()))
     logger.info("Tracklist version: {0} Length: {1} Index:{2}".format(self.core.tracklist.get_version().get(), self.core.tracklist.get_length().get(), self.core.tracklist.index(tlid=4).get()))
-    seek = self.core.playback.seek(time_position=int(rf_seek))    
-    logger.info("Seek: {0}".format(seek.get()))
     logger.info("Next Track TLID:{0}".format(self.core.tracklist.get_eot_tlid().get()))
+
+  def cb_card_removed(self):
+        logger.info("Card Removed")
+        self.core.playback.stop().get()
+        logger.info("Sent Stop command")
+        logger.info("Playback State: {0}".format(self.core.playback.get_state().get()))
+
+  def cb_stop(self):
+        self.core.playback.stop().get()
+        logger.info("Sent Stop command")
+        logger.info("Playback State: {0}".format(self.core.playback.get_state().get()))
+    
+  def cb_play(self):
+    play = self.core.playback.play().get()
+    logger.info("Sent Play command: {0}".format(play))
+    logger.info("Playback State: {0}".format(self.core.playback.get_state().get()))
+    
+  def cb_pause_play(self):
+    logger.info("Pause/Play pressed")
+    if self.core.playback.get_state().get() == core.PlaybackState.PLAYING:
+      self.core.playback.pause()
+    else:
+      self.core.playback.play()
+      logger.info("Playback State: {0}".format(self.core.playback.get_state().get()))
 
   def reload_playlists(self):
     self.playlists = []
@@ -116,15 +147,6 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
       logger.debug("Load Playlist:{0}".format(playlist))
       self.selected_playlist = 0
       logger.debug("Found {0} playlists to load.".format(len(self.playlists)))
-
-  def audio_announce(self,announcment):
-    """ A test to use mopidy.audio for the announcmenets"""
-    announcment=requests.utils.quote(announcment)
-    uri="http://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q={0}&tl=de".format(announcment)
-    logger.debug("URI:{0}".format(uri))
-    self.audio.Audio.mixer=self.mixer
-    self.audio.Audio.set_uri(self, uri=uri)
-    self.audio.Audio.start_playback()
 
   def announce(self,announcment,lang="de"):
     """

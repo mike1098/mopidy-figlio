@@ -6,7 +6,6 @@ Home-page: https://github.com/mike1098/mopidy-figlio
 Author: Michael Frank
 Author-email: michael.frank@mikefrank.de
 License: Apache License, Version 2.0
-Description: UNKNOWN
 Platform: UNKNOWN
 Classifier: Environment :: No Input/Output (Daemon)
 Classifier: Intended Audience :: End Users/Desktop
@@ -16,9 +15,12 @@ Classifier: Programming Language :: Python :: 3
 Classifier: Programming Language :: Python :: 3.7
 Classifier: Programming Language :: Python :: 3.8
 Classifier: Topic :: Multimedia :: Sound/Audio :: Players
-Requires-Python: >= 3.7
+Requires-Python: >=3.7
 Description-Content-Type: text/x-rst
-Provides-Extra: dev
 Provides-Extra: lint
 Provides-Extra: release
 Provides-Extra: test
+Provides-Extra: dev
+
+UNKNOWN
+

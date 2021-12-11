@@ -1,3 +1,2 @@
 [mopidy.ext]
-Figlio = mopidy_figlio:Extension
-
+figlio = mopidy_figlio:Extension
