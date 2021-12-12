@@ -15,20 +15,22 @@ card = Classic1k()
 def connect_card(retries=3):
     """Opens the connection to a RFID card for reading or writing"""
     while retries > 0:
-        
         (error, tag_type) = rdr.request()
         if not error:
-            (error, uid) = rdr.anticoll()
+            (error, cardid) = rdr.anticoll()
             if not error:
-                if not rdr.select_tag(uid):
-                    return uid
+                if not rdr.select_tag(cardid):
+                    return cardid
         retries -= 1
+    print("No card found!")
     return []
-    uid
+    #uid
 
-def auth_block(uid, auth, block=0):
+def auth_block(cardid, auth, block=0):
+    assert len(cardid) == 5, f"Card uid has wrong length: {cardid}"
+    assert len(auth) == 6, f"Authenticator has wrong length:{auth}"
     """Authenticate to a sector by a given block with authenticator a"""
-    error = rdr.card_auth(rdr.auth_a, block, auth, uid)
+    error = rdr.card_auth(rdr.auth_a, block, auth, cardid)
     if not error:
         print("Sucessful Auth")
         return True
@@ -44,7 +46,7 @@ def format_card(cardid, card, startblock=1):
     # Authenticate to the first sector
     if not auth_block(cardid, card._sector_trailers[sector_trailer]['keya'], sector_trailer):
         print(f"could not intially authenticate block {sector_trailer}")
-        rdr.stop_crypto()
+        #rdr.stop_crypto()
         return False
     
     while data_block_index < len(card._data_blocks):
@@ -62,13 +64,13 @@ def format_card(cardid, card, startblock=1):
         # check if we need to a authenticate a new sector
         # Same code is used in read_pl!
         # TODO externalize in a function
-    rdr.stop_crypto()    
+    #rdr.stop_crypto()    
     return True
 
 def write_playlist(cardid, card, playlist, startblock=8):
     assert startblock > 0, "Cannot write to Manufacturer Block 0"
     #TODO repair this assert!
-    #assert len(playlist) <= len(card._data_blocks) * card.sector_length - startblock , f"Playlist must not be longer than {len(card._data_blocks * card.sector_length)- startblock}"
+    #assert len(playlist) <= len(card._data_blocks) * card.block_length - startblock , f"Playlist must not be longer than {len(card._data_blocks * card.block_length)- startblock}"
     idx= 0
     playlist_encode= list(playlist.encode())
     data_block_index = card._data_blocks.index(startblock)
@@ -80,17 +82,30 @@ def write_playlist(cardid, card, playlist, startblock=8):
         rdr.stop_crypto()
         return False
     while idx < len(playlist_encode):
-        block_to_write = playlist_encode[idx:idx+card.sector_length]
-        if len(block_to_write) < 16:
-            block_to_write.extend([0 for i in range(len(block_to_write),16)])
+        if card.get_sector_trailer(card._data_blocks[data_block_index]) != sector_trailer:
+                    sector_trailer = card.get_sector_trailer(card._data_blocks[data_block_index])
+                    print(f"New Sector Trailer: {sector_trailer}")
+                    if not auth_block(cardid, card._sector_trailers[sector_trailer]['keya'], sector_trailer):
+                        print(f"could not authenticate block {sector_trailer}")
+                        rdr.stop_crypto()
+                        return False
+        block_to_write = playlist_encode[idx:idx+card.block_length]
+        if len(block_to_write) < card.block_length:
+            block_to_write.extend([0 for i in range(len(block_to_write),card.block_length)])
         print(f"Block to write: {block_to_write}")
-        idx+=card.sector_length # use card.sector_length
+        rdr.write(card._data_blocks[data_block_index], block_to_write)
+        data_block_index += 1
+        idx+=card.block_length
 
-    rdr.stop_crypto()
+    #rdr.stop_crypto()
     return
     
 cardid = connect_card()
-#format_card(cardid, card)
-write_playlist(cardid,card,sys.argv[1])
 
+if len(cardid) == 5:
+    format_card(cardid, card)
+    write_playlist(cardid,card,sys.argv[1])
+
+#TODO need to find out where is the best place to do this
+rdr.stop_crypto()
 rdr.cleanup()

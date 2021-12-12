@@ -25,9 +25,11 @@ def connect_card(retries=3):
     return []
     uid
 
-def auth_block(uid, auth, block=0):
+def auth_block(cardid, auth, block=0):
+    assert len(cardid) == 5, f"Card uid has wrong length: {cardid}"
+    assert len(auth) == 6, f"Authenticator has wrong length:{auth}"
     """Authenticate to a sector by a given block with authenticator a"""
-    error = rdr.card_auth(rdr.auth_a, block, auth, uid)
+    error = rdr.card_auth(rdr.auth_a, block, auth, cardid)
     if not error:
         print("Sucessful Auth")
         return True
