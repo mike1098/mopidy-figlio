@@ -60,7 +60,7 @@ def read_data(rdr, cardid, block=2):
     returns a list with this items
     """
     logging.info(f"reading volume, language code, track nr. and track progress,  from card "
-                 f"starting with block #{startblock:02}")
+                 f"starting with block #{block:02}")
     keya = card.get_key_a(block)
     if not auth_block(rdr, cardid, keya, block):
         logging.error(f"could not intially authenticate block #{block:02}")
