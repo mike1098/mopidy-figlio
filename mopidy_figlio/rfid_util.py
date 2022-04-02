@@ -96,6 +96,8 @@ class RfidUtil:
                                   f"{card.data_blocks[data_block_index]:02}"
                                   "-> end of text. Stop reading.")
                     block_not_zero = False
+                    #Remove any trailing zero´s from raw content
+                    content = [byte for byte in raw_content if byte != 0]
                 else:
                     data_block_index += 1
                     if data_block_index == len(card.data_blocks):
@@ -107,9 +109,10 @@ class RfidUtil:
                         logging.error(f"could not authenticate block #{new_block:02}")
                         return None
             else:
-                logging.error(f"Could not read block #{card.data_blocks[data_block_index]}")
+                logging.error(f"Could not read block #"
+                              f"{card.data_blocks[data_block_index]}")
                 return None
-        return bytes(raw_content).decode().rstrip('\0x00')
+        return bytes(content).decode()
 
     def read_data(self,block=2):
         """
@@ -119,8 +122,8 @@ class RfidUtil:
         """
         card=self.card
         rdr=self.reader
-        logging.info(f"reading volume, language code, track nr. and track progress,  from card "
-                     f"starting with block #{block:02}")
+        logging.info(f"reading volume, language code, track nr. and track"
+                     f" progress,  from card starting with block #{block:02}")
         if not self.auth_block_a(block):
             logging.error(f"could not intially authenticate block #{block:02}")
             return None
@@ -145,7 +148,8 @@ class RfidUtil:
         rdr=self.reader
         logging.info(f"Writing volume: {volume:02} to block #{block:02}")
         if not self.auth_block_a(block):
-            logging.error(f"could not intially authenticate block #{block:02} to write volume")
+            logging.error(f"could not intially authenticate block #{block:02}"
+                          f" to write volume")
             return False
         error, block_content = rdr.read(block)
         if error:
@@ -171,7 +175,8 @@ class RfidUtil:
         rdr=self.reader
         logging.info(f"Writing language code {lang} to block #{block:02}")
         if not self.auth_block_a(block):
-            logging.error(f"could not intially authenticate block #{block:02} to write language")
+            logging.error(f"could not intially authenticate block #{block:02}"
+                          f" to write language")
             return False
         error, block_content = rdr.read(block)
         if error:
@@ -198,7 +203,8 @@ class RfidUtil:
         rdr=self.reader
         logging.info(f"Writing track number {track_nr} to block #{block:02}")
         if not self.auth_block_a(block):
-            logging.error(f"could not intially authenticate block #{block:02} to write track_nr")
+            logging.error(f"could not intially authenticate block #{block:02}"
+                          f" to write track_nr")
             return False
         error, block_content = rdr.read(block)
         if error:
@@ -292,4 +298,41 @@ class RfidUtil:
                 return False
             data_block_index += 1
             idx+=card.block_length
+        return True
+
+    def format_card(self, startblock: int=1):
+        """Overwrites all block data with 0x00 starting with a block
+
+        Returns True if successful otherwise False
+        """
+        card=self.card
+        rdr=self.reader
+        logging.info("Overwrite all blocks in card with 0x00 "
+                    f"starting with block #{startblock:02}")
+        if startblock == 0:
+            logging.error("Cannot write to Manufacturer Block 0")
+        data_block_index = card.data_blocks.index(startblock)
+        sector_trailer=card.get_sector_trailer(startblock)
+        # Authenticate to the first sector
+        if not self.auth_block_a(sector_trailer):
+            logging.error(f"could not intially authenticate block #"
+                          f"{sector_trailer:02} to format card")
+            return False
+        while data_block_index < len(card.data_blocks):
+            new_block = card.data_blocks[data_block_index]
+            sector_trailer= self.auth_new_block_a(sector_trailer, new_block)
+            if not sector_trailer:
+                logging.error(f"could not authenticate block #{new_block:02}"
+                              f" to format card")
+                return False
+            logging.debug(f"\tWrite {card.default_data_blocks}"
+                          f"to block #{card.data_blocks[data_block_index]:02}")
+            # pirc522 return True in case of any error :-(
+            error = rdr.write(card.data_blocks[data_block_index], card.default_data_blocks)
+            if error:
+                logging.error(f"could not format block #"
+                              f"{card.data_blocks[data_block_index]:02}")
+                return False
+            # Next data block
+            data_block_index += 1
         return True
