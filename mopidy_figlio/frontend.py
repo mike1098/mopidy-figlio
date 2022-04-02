@@ -9,12 +9,13 @@ Provide a menu driven by text to speach commands to write a playlist to a RFID c
 import logging
 from mopidy import core
 import pykka
-
+from .rfid_util import RfidUtil
 # For RFID reader and control buttons we need GPIOs
 # If other device as Raspi is used needs to be adjusted
 #import RPi.GPIO as GPIO
+#from mfrc522 import SimpleMFRC522
 from gpiozero import Button
-from mfrc522 import SimpleMFRC522
+
 
 # For audio announcements currently GStreamer is used.
 #TODO: test if possible to use mopidy.audio instead.
@@ -34,12 +35,13 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
     self.core = core
     self.config = config["figlio"]
     self.playlists = []
-    seek_time = 0
 
   def on_start(self):
     logger.info('!!!!!!!!!!!!!!!!! Figlio Frontend started !!!!!!!!!!!!!!!!!!!!!!!!!!!!')
     Gst.init(None)
     self.reload_playlists()
+    #define the card reader
+    self.rfidutil=RfidUtil()
     #Define button to play/pause
     self.button = Button(17,pull_up=False)
     self.button.when_pressed = self.cb_pause_play
@@ -50,9 +52,13 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
 
   def on_stop(self):
     logger.info('!!!!!!!!!!!!!!!!! Figlio Frontend stopped !!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+    #Because of GPIO we need to cleanup here
+    self.rfidutil.reader.cleanup()
 
   def on_failure(self):
     logger.info('!!!!!!!!!!!!!!!!! Figlio Frontend failed !!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+    #Because of GPIO we need to cleanup here
+    self.rfidutil.reader.cleanup()
 
   def playback_state_changed(self, old_state, new_state):
         logger.info("Playback State changed from: {0} to: {1}".format(old_state, new_state))
@@ -66,8 +72,7 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
     This is the callback function which is called as soon as a RFID card is inserted or removed in the slot.
     Card insertation could be detected by photo sensor or physical contact switch.
     From the card the playlist URI, the position in the track list and the time position is read.
-    Current format is: <playlist uri>,<track pos>,<time pos> 
-    Example: m3u:rockantenne.m3u,4,0
+    Playlist Example: m3u:rockantenne.m3u
 
     TODOS: a lot
     """
@@ -80,23 +85,22 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
       logger.info("Core Playback State:{0}".format(self.core.playback.get_state().get()))
       return
     '''
-
     id = None
     rf_tlid = None
     rf_seek = None
-    content = None
-    #Current MFRC522 implementation of SimpleMFRC522 support only 48 bytes maximum data length.
-    #create own function for reading and writing.
-    reader = SimpleMFRC522()
-    
-    id, content = reader.read_no_block()
-    logger.info("Card ID: {0} Content: {1}".format(id, content))
-    playlist_uri, rf_tlid, rf_seek = content.split(",")
+    id = self.rfidutil.connect_card()
+    playlist_uri = self.rfidutil.read_pl()
+    volume,lang,rf_tlid,rf_seek = self.rfidutil.read_data()
+    logger.info("Card ID: {0} Playlist: {1}".format(id, playlist_uri))
     self.seek_time = int(rf_seek)
     logger.info("Playlist URI: {0} tlid: {1} seek: {2}".format(playlist_uri, rf_tlid, rf_seek))
     playlist = self.core.playlists.lookup(playlist_uri).get()
     #Playlist name is only derived from playlist filename
     #Add support of extended M3U Tag #PLAYLIST to mopidy core
+    if not playlist:
+        logger.info("Plylist not found  ")
+        self.announce(f"Die Playliste {playlist_uri} habe ich nicht gefunden")
+        return
     logger.info("Playing: {0} Last Modifed:{1} URI:{2}".format(playlist.name, playlist.last_modified, playlist.uri))
     self.announce("Ich spiele für Dich " + playlist.name)
     tracks = self.core.playlists.get_items(playlist_uri).get()
@@ -121,6 +125,7 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
         self.core.playback.stop().get()
         logger.info("Sent Stop command")
         logger.info("Playback State: {0}".format(self.core.playback.get_state().get()))
+        self.rfidutil.reader.stop_crypto()
 
   def cb_stop(self):
         self.core.playback.stop().get()
