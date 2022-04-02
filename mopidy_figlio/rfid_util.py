@@ -1,9 +1,9 @@
 
 """
-A class to read and write playlist, Track Number, time form mopidy
+A class to read and write playlist, Track Number, time from mopidy
 """
 
-import logging
+import logging,sys
 import pirc522 #https://github.com/ondryaso/pi-rc522
 import mifare
 
@@ -12,6 +12,7 @@ class RfidUtil:
         self.reader = pirc522.RFID()
         self.card = mifare.Classic1k()
         self.cardid=None
+        logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 
     def connect_card(self,retries=3):
         """Opens the connection to a RFID card for reading or writing.
@@ -34,14 +35,14 @@ class RfidUtil:
     def auth_block_a(self,block=0):
         rdr=self.reader
         cardid=self.cardid
-        key=self.card.get_key_a(block)
+        keya=self.card.get_key_a(block)
         """Authenticate to a sector by a given block with authenticator A.
 
         Returns true if authentication was successful, otherwise false.
         """
-        assert len(cardid) == 5, f"Card uid has wrong length: {cardid}"
-        assert len(key) == 6, f"Authenticator has wrong length:{key}"
-        error = rdr.card_auth(rdr.auth_a, block, key, cardid)
+        #assert len(cardid) == 5, f"Card uid has wrong length: {cardid}"
+        #assert len(key) == 6, f"Authenticator has wrong length:{keya}"
+        error = rdr.card_auth(rdr.auth_a, block, keya, cardid)
         if not error:
             logging.debug(f"Sucessful Auth block {block}")
             return True
@@ -62,3 +63,75 @@ class RfidUtil:
             if not self.auth_block_a(sector_trailer):
                 return None
         return sector_trailer
+
+    def read_pl(self, startblock=8):
+        """Reads text beinning of startblock from RFID card.
+    
+        The TEXT must be UTF8 encoded and terminated with at least one 0x00 otherwise it
+        returns none. If a sector could not be authenticated it returns None
+    
+        returns a byte object otherwise None
+        """
+        card=self.card
+        rdr=self.reader
+        logging.info(f"reading playlist from card "
+                     f"starting with block #{startblock:02}")
+        block_not_zero = True
+        data_block_index = card.data_blocks.index(startblock)
+        raw_content=[]
+        sector_trailer=card.get_sector_trailer(startblock)
+        #keya = card.get_key_a(startblock)
+        if not self.auth_block_a(startblock):
+            logging.error(f"could not intially authenticate block #{startblock:02}")
+            return None
+        while block_not_zero:
+            error, block_content = rdr.read(card.data_blocks[data_block_index])
+            if not error:
+                logging.debug(f"read block #{card.data_blocks[data_block_index]:02}"
+                      f" byte content: {block_content}")
+                raw_content.extend(block_content)
+                if 0x00 in raw_content:
+                    logging.debug(f"Found 0x00 in content at block #{card.data_blocks[data_block_index]:02}"
+                                  "-> end of text. Stop reading.")
+                    block_not_zero = False
+                else:
+                    data_block_index += 1
+                    if data_block_index == len(card.data_blocks):
+                        logging.error("Reached end of card while reading!")
+                        return False
+                    new_block = card.data_blocks[data_block_index]
+                    sector_trailer= self.auth_new_block_a(sector_trailer, new_block)
+                    if not sector_trailer:
+                        logging.error(f"could not authenticate block #{new_block:02}")
+                        return None
+            else:
+                logging.error(f"Could not read block #{card.data_blocks[data_block_index]}")
+                return None
+        return bytes(raw_content).decode().rstrip('\0x00')
+
+    def read_data(self,block=2):
+        """
+        Reads the volume, language code track nr and progress from card
+    
+        returns a list with this items
+        """
+        card=self.card
+        rdr=self.reader
+        logging.info(f"reading volume, language code, track nr. and track progress,  from card "
+                     f"starting with block #{block:02}")
+        #keya = card.get_key_a(block)
+        if not self.auth_block_a(block):
+            logging.error(f"could not intially authenticate block #{block:02}")
+            return None
+        # pirc522 return True in case of any error :-(
+        error, block_content = rdr.read(block)
+        if error:
+            logging.error(f"Could not read block #{block:02}")     
+            return None
+        logging.debug(f"read block #:{block:02}"
+                      f" byte content: {block_content}")
+        vol = block_content[0]
+        lang=''.join(map(chr,block_content[1:3]))
+        track_nr = card.block2int(block_content[3:5])
+        track_progress = card.block2int(block_content[5:9])
+        return vol, lang, track_nr, track_progress
