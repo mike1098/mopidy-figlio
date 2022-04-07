@@ -43,8 +43,20 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
     #define the card reader
     self.rfidutil=RfidUtil()
     #Define button to play/pause
-    self.button = Button(17,pull_up=False)
-    self.button.when_pressed = self.cb_pause_play
+    self.button_play = Button(17,pull_up=False)
+    self.button_play.when_pressed = self.cb_pause_play
+    #Define Button skip/seek forward
+    self.button_fwd = Button(27,pull_up=False)
+    self.button_fwd.when_pressed = self.cb_skip_forward
+    #Define Button skip/seek backward
+    self.button_back = Button(22,pull_up=False)
+    self.button_back.when_pressed = self.cb_skip_backward
+    #Define Button volume up
+    self.button_vol_up = Button(23,pull_up=False)
+    self.button_vol_up.when_pressed = self.cb_vol_up
+    #Define Button volume dowwn
+    self.button_vol_down = Button(24,pull_up=False)
+    self.button_vol_down.when_pressed = self.cb_vol_down
     #photo sensor; If high or active, card is inserted.
     self.sensor = Button(25,pull_up=False)
     self.sensor.when_pressed = self.cb_card_inserted
@@ -92,6 +104,8 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
     playlist_uri = self.rfidutil.read_pl()
     volume,lang,rf_tlid,rf_seek = self.rfidutil.read_data()
     logger.info("Card ID: {0} Playlist: {1}".format(id, playlist_uri))
+    logger.info(f"Changing volume to {volume}")
+    self.core.mixer.set_volume(volume)
     self.seek_time = int(rf_seek)
     logger.info("Playlist URI: {0} tlid: {1} seek: {2}".format(playlist_uri, rf_tlid, rf_seek))
     playlist = self.core.playlists.lookup(playlist_uri).get()
@@ -145,6 +159,30 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
       self.core.playback.play()
       logger.info("Playback State: {0}".format(self.core.playback.get_state().get()))
 
+  def cb_skip_forward(self):
+      logger.info("Skip forward pressed")
+      self.core.playback.next()
+
+  def cb_skip_backward(self):
+      logger.info("Skip backward pressed")
+      self.core.playback.previous()
+  
+  def cb_vol_up(self):
+      logger.info("Volume UP")
+      step = int(self.config.get("step", 5))
+      volume = self.core.mixer.get_volume().get()
+      volume += step
+      volume = min(volume, 100)
+      self.core.mixer.set_volume(volume)
+  
+  def cb_vol_down(self):
+      logger.info("Volume DOWN")
+      step = int(self.config.get("step", 5))
+      volume = self.core.mixer.get_volume().get()
+      volume -= step
+      volume = max(volume, 0)
+      self.core.mixer.set_volume(volume)
+
   def reload_playlists(self):
     self.playlists = []
     for playlist in self.core.playlists.as_list().get():
@@ -157,7 +195,6 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
     """
     Using GStreamer to play annoncments like the name of the playlist loaded
     """
-    
     payload = {"tl": lang, "ie": "UTF-8", "client": "tw-ob", "q": announcment}
     uri=Request('Get', 'https://translate.google.com/translate_tts', params=payload).prepare()
     logger.info("URI:{0}".format(uri.url))
