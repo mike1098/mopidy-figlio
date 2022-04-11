@@ -155,6 +155,10 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
     logger.info("Pause/Play pressed")
     if self.core.playback.get_state().get() == core.PlaybackState.PLAYING:
       self.core.playback.pause()
+      self.rfidutil.write_volume(self.core.mixer.get_volume().get())
+      self.rfidutil.write_track_progress(self.core.playback.get_time_position().get())
+      track_nr = self.core.playback.get_current_tl_track().get().tlid - self.core.tracklist.get_tl_tracks().get()[0].tlid
+      self.rfidutil.write_track_nr(track_nr)
     else:
       self.core.playback.play()
       logger.info("Playback State: {0}".format(self.core.playback.get_state().get()))
