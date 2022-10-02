@@ -17,7 +17,8 @@ track_progress is by default 0
 """
 import logging
 import sys
-from pirc522 import RFID #https://github.com/ondryaso/pi-rc522
+#from pirc522 import RFID #https://github.com/ondryaso/pi-rc522
+from mopidy_figlio.rfid import RFID
 import mifare
 from functions import auth_block, auth_new_block, connect_card
 
@@ -219,6 +220,6 @@ if id_card:
     write_text(reader, id_card, card1k,sys.argv[1])
     write_volume(reader, id_card, card1k, )
     write_lang(reader, id_card, card1k,'DE')
-    write_track_nr(reader, id_card, card1k, 15)
-    write_track_progress(reader, id_card, card1k, 66666666)
+    write_track_nr(reader, id_card, card1k, 2)
+    write_track_progress(reader, id_card, card1k, 35)
 reader.cleanup()

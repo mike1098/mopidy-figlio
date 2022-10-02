@@ -4,7 +4,8 @@
 Returns text
 """
 import logging, sys
-from pirc522 import RFID #https://github.com/ondryaso/pi-rc522
+#from rfid import RFID #https://github.com/ondryaso/pi-rc522
+from mopidy_figlio.rfid import RFID
 import mifare
 from functions import auth_block, auth_new_block, connect_card
 
@@ -51,7 +52,7 @@ def read_pl(rdr, cardid, startblock=8):
         else:
             logging.error(f"Could not read block #{card.data_blocks[data_block_index]}")
             return None
-    return bytes(raw_content).decode()
+    return bytes(raw_content).decode().rstrip('\0x00')
 
 def read_data(rdr, cardid, block=2):
     """

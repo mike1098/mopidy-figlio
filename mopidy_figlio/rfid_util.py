@@ -5,7 +5,8 @@ A Module to support RFID card read and write
 
 import logging
 import sys
-import pirc522 #https://github.com/ondryaso/pi-rc522
+#import pirc522 #https://github.com/ondryaso/pi-rc522
+from .rfid import RFID
 import mifare
 
 class RfidUtil:
@@ -13,10 +14,11 @@ class RfidUtil:
     A class to read and write playlist, Track Number, time from mopidy
     """
     def __init__(self) -> None:
-        self.reader = pirc522.RFID()
+        #self.reader = pirc522.RFID()
+        self.reader = RFID()
         self.card = mifare.Classic1k()
         self.cardid=None
-        logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
+        logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 
     def connect_card(self,retries=3):
         """Opens the connection to a RFID card for reading or writing.
@@ -336,3 +338,6 @@ class RfidUtil:
             # Next data block
             data_block_index += 1
         return True
+
+if (__name__ == '__main__'):
+    pass

@@ -20,6 +20,7 @@ def connect_card(rdr,retries=3):
     return None
 
 def auth_block(rdr, cardid, key, block=0):
+    #TODO needs to be renamed to auth_block_a or make it optional
     """Authenticate to a sector by a given block with authenticator A.
 
     Returns true if authentication was successful, otherwise false.
@@ -33,6 +34,7 @@ def auth_block(rdr, cardid, key, block=0):
     return False
 
 def auth_new_block(rdr, card, cardid, sector_trailer, block):
+    #TODO needs to be renamed to auth_new_block_a or make it optional
     """
     Check if the new block has a new sector trailer and authenticate if needed.
 
