@@ -26,6 +26,7 @@ from gi.repository import Gst, GObject
 from requests import Request
 
 from time import sleep
+import threading
 
 logger = logging.getLogger(__name__) #mopidy_figlio.frontend
 
@@ -61,16 +62,29 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
     self.sensor = Button(25,pull_up=False)
     self.sensor.when_pressed = self.cb_card_inserted
     self.sensor.when_released = self.cb_card_removed
+    # Define an event to stop the loop-
+    self.loop_run = threading.Event()
+    self.loop_run.set()
 
   def on_stop(self):
     logger.info('!!!!!!!!!!!!!!!!! Figlio Frontend stopped !!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+    #Stop the loop wrting to card
+    self.loop_run.set()
+    self.loop.join()
     #Because of GPIO we need to cleanup here
+    self.rfidutil.reader.stop_crypto()
     self.rfidutil.reader.cleanup()
+    
 
   def on_failure(self):
     logger.info('!!!!!!!!!!!!!!!!! Figlio Frontend failed !!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+    #Stop the loop wrting to card
+    self.loop_run.set()
+    self.loop.join()
     #Because of GPIO we need to cleanup here
+    self.rfidutil.reader.stop_crypto()
     self.rfidutil.reader.cleanup()
+    
 
   def playback_state_changed(self, old_state, new_state):
         logger.info("Playback State changed from: {0} to: {1}".format(old_state, new_state))
@@ -81,7 +95,7 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
   
   def cb_card_inserted(self,channel):
     """
-    This is the callback function which is called as soon as a RFID card is inserted or removed in the slot.
+    This is the callback function which is called as soon as a RFID card is inserted in the slot.
     Card insertation could be detected by photo sensor or physical contact switch.
     From the card the playlist URI, the position in the track list and the time position is read.
     Playlist Example: m3u:rockantenne.m3u
@@ -130,17 +144,41 @@ class FiglioFrontend(pykka.ThreadingActor, core.CoreListener):
     first_tlid = self.core.tracklist.get_tl_tracks().get()[0].tlid
     logger.info("TLIDs: {0}".format(self.core.tracklist.get_tl_tracks().get()))
     play = self.core.playback.play(tlid=int(rf_tlid)+first_tlid)
+    logger.info("\n\n\nStart Loop\n\n\n")
+    self.loop_run.clear()
+    # Define thread for loop to write to the card and start it
+    self.loop = threading.Thread(target=self.loop_write_to_card)
+    self.loop.start()
     logger.info("Play command result:{0}".format(play.get()))
     logger.info("Tracklist version: {0} Length: {1} Index:{2}".format(self.core.tracklist.get_version().get(), self.core.tracklist.get_length().get(), self.core.tracklist.index(tlid=4).get()))
     logger.info("Next Track TLID:{0}".format(self.core.tracklist.get_eot_tlid().get()))
 
+  def loop_write_to_card(self):
+    while True:
+      if self.loop_run.is_set():
+          logger.info("\n\n\n Loop stopped\n\n\n")
+          break
+      if self.core.playback.get_state().get() == 'playing':
+          logger.info("\n\n\n Loop write to card\n\n\n")
+          self.rfidutil.write_volume(self.core.mixer.get_volume().get())
+          self.rfidutil.write_track_progress(self.core.playback.get_time_position().get())
+          track_nr = self.core.playback.get_current_tl_track().get().tlid - self.core.tracklist.get_tl_tracks().get()[0].tlid
+          self.rfidutil.write_track_nr(track_nr)
+      sleep(5)
+
   def cb_card_removed(self):
+        '''
+        This is the callback function which is called as soon as a RFID card is removed in the slot.
+        We stop plying as soon as card is removed and stop the loop to write to the card.
+        '''
         logger.info("Card Removed")
         self.core.playback.stop().get()
+        self.loop_run.set()
+        self.loop.join()
         logger.info("Sent Stop command")
         logger.info("Playback State: {0}".format(self.core.playback.get_state().get()))
         self.rfidutil.reader.stop_crypto()
-
+        
   def cb_stop(self):
         self.core.playback.stop().get()
         logger.info("Sent Stop command")
